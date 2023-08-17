@@ -1,0 +1,221 @@
+name: Setup repository
+on:
+  push:
+    paths:
+      - cookiecutter.json
+jobs:
+  setup:
+    name: Initialize repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      packages: write
+      contents: write
+      checks: write
+      deployments: write
+      pull-requests: write
+      statuses: write
+      issues: write
+    steps:
+      - name: Do not run scaffolding on template repository
+        shell: bash
+        run: |
+          curl --silent -X GET \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.baptiste-preview+json" \
+            https://api.github.com/repos/$GITHUB_REPOSITORY \
+            | jq --exit-status '.is_template == false';
+      - uses: actions/checkout@v2
+        with:
+          ref: master
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Get latest Flutter version
+        run: |
+          set -ex
+          file=$(curl "https://api.github.com/repos/discovery-ltd/flutter-central-versioning/contents/flutter_version" -L -u "disco-bot:${{ secrets.API_TOKEN_DISCO_BOT }}" | jq '.download_url' | xargs)
+          echo $file
+          version=$(curl "$file")
+          echo "FLUTTER_VERSION=$version" >> $GITHUB_ENV
+      - uses: subosito/flutter-action@v2
+        name: Configure flutter
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+      - name: Configure netrc for api.github.com
+        uses: extractions/netrc@v1
+        with:
+          machine: api.github.com
+          username: disco-bot
+          password: ${{ secrets.API_TOKEN_DISCO_BOT }}
+      - name: Configure netrc for github.com
+        uses: extractions/netrc@v1
+        with:
+          machine: github.com
+          username: disco-bot
+          password: ${{ secrets.API_TOKEN_DISCO_BOT }}
+      - uses: ruby/setup-ruby@v1
+        name: Configure ruby 2.6
+        with:
+          ruby-version: 2.6
+      - name: Configure gradle credentials
+        run: |
+          #!/usr/bin/env bash
+          set -ex
+          MAVEN_USERNAME=aessedai101
+          MAVEN_PASSWORD=${{ secrets.API_TOKEN_DISCO_BOT_READ_PACKAGES }}
+          # gradle deployment deets
+          mkdir -p ~/.gradle
+          touch ~/.gradle/gradle.properties
+          echo "mavenUsername="$MAVEN_USERNAME > ~/.gradle/gradle.properties
+          echo "mavenPassword="$MAVEN_PASSWORD >> ~/.gradle/gradle.properties
+      - name: Install dependencies
+        run: pip install cookiecutter
+      - name: Scaffolding repository
+        run: |
+          cp cookiecutter.json template/cookiecutter.json
+          cookiecutter template --no-input --output-dir ./cookiecutter-temp
+          cp gradlew/gradlew ./cookiecutter-temp/template/test_app/android/gradlew
+          cp gradlew/gradlew.bat ./cookiecutter-temp/template/test_app/android/gradlew.bat
+      - name: Prepare root directory
+        shell: bash
+        run: |
+          find ./ -maxdepth 1 \
+          ! -name '.git' \
+          ! -name 'cookiecutter-temp' \
+          ! -name '.' \
+          ! -exec rm -rf {} +
+      - name: Move files to root
+        shell: bash
+        run: |
+          rsync -a ./cookiecutter-temp/template/. .
+          rm -rf ./cookiecutter-temp/
+      - name: Commit the changes
+        shell: bash
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com" && \
+          git config --global user.name "github-actions[bot]" && \
+          git checkout master && \
+          git add . && \
+          git commit -m 'Initialised repository' && \
+          git push origin HEAD:master
+      - name: Run intial scripts
+        run: |
+          ./pub_get.sh
+      - name: Commit the changes
+        shell: bash
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com" && \
+          git config --global user.name "github-actions[bot]" && \
+          git checkout master && \
+          git add . && \
+          git commit -m 'Ran the scripts' && \
+          git push origin HEAD:master
+      - uses: EndBug/label-sync@v2
+        name: Sync labels from flutter-container
+        with:
+          source-repo: discovery-ltd/flutter-container
+          request-token:  ${{ secrets.API_TOKEN_DISCO_BOT }}
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Create the develop branch  
+          body: Standard flow for these repo's are that master is prod and develop is WIP
+          labels: framework,workflow
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Set up bitrise
+          body: The repository comes pre-populated with a bitrise.yml file. Point bitrise to it and set up secrets. Make sure the CI flow completes successfully
+          labels: workflow
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Expand the CODEOWNERS file
+          body: If necessary, add more owners
+          labels: workflow
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Verify GitHub actions
+          body: Verify that all GitHub actions show up in the actions tab. Fix any that don't
+          labels: workflow
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Set up branch restrictions
+          body: Both `master` and `develop` should only accept changes via PR with working builds & at least 2 approvals
+          labels: workflow
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Check git for generated files
+          body: Occasionally, generated files sneak in. Remove them and update .gitignore
+          labels: workflow
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Verify that Dart code coverage is displayed on PRs
+          body: It should just work
+          labels: workflow,flutter
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Code coverage - Android
+          body: Add code coverage for Android components to pull requests
+          labels: android,help wanted,enhancement
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Code coverage - iOS
+          body: Add code coverage for iOS components to pull requests
+          labels: ios,help wanted,enhancement
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Do your first release
+          body: Open a release PR into master and verify that all the release pipelines function correctly
+          labels: workflow  
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Add plugin interface
+          body: Create the shared plugin interface in the platform_interface module.
+          labels: framework,flutter
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Add the main plugin implementation
+          body: In the main plugin, create the same methods as in the interface and invoke `_Platform.instance.<method>` to make the platform-specific implementations available
+          labels: framework,flutter
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Implement the test_app
+          body: In the test_app module, invoke your main plugin methods and display the success/failure results 
+          labels: framework,flutter
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Plugin implementation - Android
+          body: In the _android module, implement the _platform_interface you created
+          labels: framework,flutter,android
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Plugin implementation - iOS
+          body: In the _ios module, implement the _platform_interface you created
+          labels: framework,flutter,ios
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Plugin implementation - Web
+          body: In the _web module, implement the _platform_interface you created
+          labels: framework,flutter,web
+      - uses: dacbd/create-issue-action@main
+        with:
+          token: ${{ secrets.API_TOKEN_DISCO_BOT }}
+          title: Readme
+          body: Write a proper README that explains what this plugin does and why it exists
+          labels: framework,documentation

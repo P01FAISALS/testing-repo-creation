@@ -1,0 +1,72 @@
+group 'za.co.discovery.flutter.{{ cookiecutter.project_name|lower|replace(' ', '_') }}_android'
+version '0.0.1'
+
+buildscript {
+    repositories {
+        google()
+        maven {
+            url "https://maven.pkg.github.com/discovery-ltd/repo"
+            credentials {
+                username mavenUsername
+                password mavenPassword
+            }
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+        mavenCentral()
+    }
+
+    apply from: "android-buildscript.gradle", to: buildscript
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        maven {
+            url "https://maven.pkg.github.com/discovery-ltd/repo"
+            credentials {
+                username mavenUsername
+                password mavenPassword
+            }
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    compileSdkVersion 33
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        minSdkVersion 23
+    }
+
+    buildTypes {
+        debug {
+            testCoverageEnabled = true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.10.1'
+}

@@ -1,0 +1,37 @@
+name: {{ cookiecutter.project_name|lower|replace(' ', '_') }}_android
+description: The Android implementation for the {{ cookiecutter.project_name }} plugin.
+version: 0.0.1
+homepage:
+publish_to: none
+
+environment:
+  sdk: ">=2.17.0 <3.0.0"
+  flutter: ">=2.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  json_annotation: ^4.4.0
+  mockito: ^5.4.0
+  {{ cookiecutter.project_name|lower|replace(' ', '_') }}_platform_interface:
+    git:
+      url: git@github.com:discovery-ltd/v1-{{ cookiecutter.project_name|lower|replace(' ', '-') }}-plugin.git
+      path: {{ cookiecutter.project_name|lower|replace(' ', '_') }}_platform_interface
+      ref: master #plugin
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^1.0.0
+  build_runner: ^2.1.2
+  json_serializable: ^6.1.1
+  plugin_platform_interface: ^2.1.0
+
+flutter:
+  plugin:
+    implements: {{ cookiecutter.project_name|lower|replace(' ', '_') }}
+    platforms:
+      android:
+        package: za.co.discovery.flutter.{{ cookiecutter.project_name|lower|replace(' ', '_') }}
+        pluginClass: {{ cookiecutter.project_name|replace(' ', '') }}AndroidPlugin
+        dartPluginClass: {{ cookiecutter.project_name|replace(' ', '') }}Android

@@ -1,0 +1,3 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="za.co.discovery.flutter.{{ cookiecutter.project_name|lower|replace(' ', '_') }}_android">
+</manifest>

@@ -1,0 +1,31 @@
+# Symlinked from Fastlane/Fastfile
+# frozen_string_literal: true
+
+fastlane_version '2.178.0'
+REQUIRED_XCODE_VERSION = '13.0'
+
+MEMSPECS_REPO = 'https://github.com/discovery-ltd/memberspecs-ios.git'
+SPECS_REPO_SOURCES = "https://cdn.cocoapods.org/,https://github.com/discovery-ltd/memberspecs-ios.git"
+
+default_platform(:ios)
+
+platform :ios do
+  before_all do
+    ensure_xcode_version(version: REQUIRED_XCODE_VERSION, strict: false)
+  end
+
+  desc 'Runs quick pod lib lint'
+  lane :lint do
+    mem_pod_quick_lint_podspec
+  end
+
+  desc 'Runs full pod lib lint'
+  lane :lint_full do
+    mem_pod_full_lint_podspec
+  end
+
+  desc 'Check code coverage on project'
+  lane :pod_code_coverage do
+    mem_pod_code_coverage
+  end
+end

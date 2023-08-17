@@ -1,0 +1,47 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url "https://maven.pkg.github.com/discovery-ltd/repo"
+            credentials {
+                username mavenUsername
+                password mavenPassword
+            }
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+
+    apply from: "../../{{ cookiecutter.project_name|lower|replace(' ', '_') }}_android/android/android-buildscript.gradle", to: buildscript
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url "https://maven.pkg.github.com/discovery-ltd/repo"
+            credentials {
+                username mavenUsername
+                password mavenPassword
+            }
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+}
+
+rootProject.buildDir = '../build'
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

@@ -1,0 +1,367 @@
+---
+app:
+  envs:
+    - BITRISE_FLUTTER_PROJECT_LOCATION: {{ cookiecutter.project_name|lower|replace(' ', '_') }}
+      opts:
+        is_expand: false
+    - opts:
+        is_expand: false
+      GRADLEW_PATH: test_app/android/gradlew
+    - FLUTTER_VERSION: 2.8.1
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+format_version: '11'
+project_type: flutter
+trigger_map:
+  - pull_request_source_branch: release/*
+    pull_request_target_branch: master
+    workflow: update-versions-and-release
+  - pull_request_source_branch: "*"
+    workflow: CI
+  - push_branch: master
+    workflow: CI
+workflows:
+  CI:
+    steps:
+      - build-router-start@0:
+          inputs:
+            - access_token: "$ACCESS_TOKEN"
+            - workflows: |-
+                CI-Flutter
+                CI-iOS
+                CI-Android
+      - build-router-wait@0:
+          inputs:
+            - access_token: "$ACCESS_TOKEN"
+  CI-Android:
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{ "{{getenv \"SSH_RSA_PRIVATE_KEY\" | ne \"\"}}" }}'
+      - git-clone@6: {}
+      - cache-pull@2: {}
+      - set-java-version@1:
+          inputs:
+            - set_java_version: '11'
+      - flutter-installer@0:
+          inputs:
+            - version: "$FLUTTER_VERSION"
+            - is_update: 'false'
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                # fail if any commands fails
+                set -e
+                # debug log
+                set -x
+                echo "Setting up private repo creds"
+                mkdir -p ~/.gradle
+                touch ~/.gradle/gradle.properties
+                echo "mavenUsername="$MAVEN_USER > ~/.gradle/gradle.properties
+                echo "mavenPassword="$MAVEN_PASSWORD >> ~/.gradle/gradle.properties
+                cat ~/.gradle/gradle.properties
+          title: Gradle credentials
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                # fail if any commands fails
+                set -e
+                # debug log
+                set -x
+                
+                echo -e "\n\nmachine api.github.com\nlogin ${MAVEN_USER}\npassword ${MAVEN_PASSWORD}" >> ~/.netrc
+                echo -e "\n\nmachine github.com\nlogin ${MAVEN_USER}\npassword ${MAVEN_PASSWORD}" >> ~/.netrc
+                
+                chmod 0600 /Users/vagrant/.netrc
+          title: Configure .netrc
+      - script@1:
+          inputs:
+            - content: |-
+                set -ex
+                
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_platform_interface; flutter pub get)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_android; flutter pub get)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios; flutter pub get)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}; flutter pub get)
+                (cd test_app; flutter pub get)
+      - install-missing-android-tools@3.0:
+      - script@1:
+          inputs:
+            - content: |+
+                #!/usr/bin/env bash
+                set -ex
+                
+                android="./gradlew :{{ cookiecutter.project_name|lower|replace(' ', '_') }}_android:lint :{{ cookiecutter.project_name|lower|replace(' ', '_') }}_android:testDebugUnitTest"
+                
+                (cd test_app; flutter build apk --debug)
+                (cd test_app/android; sh -c "$android")
+          title: Build, test  and analyze
+      - cache-push@2: {}
+      - deploy-to-bitrise-io@2.0: {}
+  CI-Flutter:
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{ "{{getenv \"SSH_RSA_PRIVATE_KEY\" | ne \"\"}}" }}'
+      - git-clone@6: {}
+      - cache-pull@2: {}
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                # fail if any commands fails
+                set -e
+                # debug log
+                set -x
+                echo "Setting up private repo creds"
+                mkdir -p ~/.gradle
+                touch ~/.gradle/gradle.properties
+                echo "mavenUsername="$MAVEN_USER > ~/.gradle/gradle.properties
+                echo "mavenPassword="$MAVEN_PASSWORD >> ~/.gradle/gradle.properties
+                cat ~/.gradle/gradle.properties
+          title: Gradle credentials
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                # fail if any commands fails
+                set -e
+                # debug log
+                set -x
+                
+                echo -e "\n\nmachine api.github.com\nlogin ${MAVEN_USER}\npassword ${MAVEN_PASSWORD}" >> ~/.netrc
+                echo -e "\n\nmachine github.com\nlogin ${MAVEN_USER}\npassword ${MAVEN_PASSWORD}" >> ~/.netrc
+                
+                chmod 0600 /Users/vagrant/.netrc
+          title: Configure .netrc
+      - flutter-installer@0:
+          inputs:
+            - version: "$FLUTTER_VERSION"
+            - is_update: 'false'
+      - script@1:
+          inputs:
+            - content: |+
+                #!/usr/bin/env bash
+                set -ex
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_platform_interface; flutter pub get)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_android; flutter pub get)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios; flutter pub get)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}; flutter pub get)
+                
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_platform_interface; flutter analyze)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_android; flutter analyze)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios; flutter analyze)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}; flutter analyze)
+                
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_android; flutter test)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios; flutter test)
+          title: Build, test and analyze
+      - cache-push@2: {}
+      - deploy-to-bitrise-io@2.0: {}
+  CI-iOS:
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{ "{{getenv \"SSH_RSA_PRIVATE_KEY\" | ne \"\"}}" }}'
+      - git-clone@6: {}
+      - cache-pull@2: {}
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                # fail if any commands fails
+                set -e
+                # debug log
+                set -x
+                echo "Setting up private repo creds"
+                mkdir -p ~/.gradle
+                touch ~/.gradle/gradle.properties
+                echo "mavenUsername="$MAVEN_USER > ~/.gradle/gradle.properties
+                echo "mavenPassword="$MAVEN_PASSWORD >> ~/.gradle/gradle.properties
+                cat ~/.gradle/gradle.properties
+          title: Gradle credentials
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                # fail if any commands fails
+                set -e
+                # debug log
+                set -x
+                
+                echo -e "\n\nmachine api.github.com\nlogin ${MAVEN_USER}\npassword ${MAVEN_PASSWORD}" >> ~/.netrc
+                echo -e "\n\nmachine github.com\nlogin ${MAVEN_USER}\npassword ${MAVEN_PASSWORD}" >> ~/.netrc
+                
+                chmod 0600 /Users/vagrant/.netrc
+          title: Configure .netrc
+      - flutter-installer@0:
+          inputs:
+            - version: "$FLUTTER_VERSION"
+            - is_update: 'false'
+      - script@1:
+          inputs:
+            - content: |+
+                #!/usr/bin/env bash
+                set -ex
+                
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_platform_interface; flutter pub get)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios; flutter pub get)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_android; flutter pub get)           
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}; flutter pub get)               
+                
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios/ios; bundle install)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios/ios; bundle exec pod lib lint --private --allow-warnings --sources="https://cdn.cocoapods.org/,https://github.com/discovery-ltd/memberspecs-ios.git")
+                
+                (cd test_app;flutter pub get)
+                (cd test_app;flutter precache --ios)
+                
+                (cd test_app/ios; bundle install)
+                (cd test_app/ios; bundle exec pod install)
+                
+                (cd test_app;flutter build ios --simulator)
+                (cd test_app;flutter build ios-framework)
+
+          title: Build, test and analyze
+      - cache-push@2: {}
+      - deploy-to-bitrise-io@2.0: {}
+  update-versions-and-release:
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{ "{{getenv \"SSH_RSA_PRIVATE_KEY\" | ne \"\"}}" }}'
+      - git-clone@6: {}
+      - cache-pull@2: {}
+      - set-java-version@1:
+          inputs:
+            - set_java_version: '11'
+      - flutter-installer@0:
+          inputs:
+            - version: "$FLUTTER_VERSION"
+            - is_update: 'false'
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                # fail if any commands fails
+                set -e
+                # debug log
+                set -x
+                echo "Setting up private repo creds"
+                mkdir -p ~/.gradle
+                touch ~/.gradle/gradle.properties
+                echo "mavenUsername="$MAVEN_USER > ~/.gradle/gradle.properties
+                echo "mavenPassword="$MAVEN_PASSWORD >> ~/.gradle/gradle.properties
+                cat ~/.gradle/gradle.properties
+          title: Gradle credentials
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                # fail if any commands fails
+                set -e
+                # debug log
+                set -x
+                
+                echo -e "\n\nmachine api.github.com\nlogin ${MAVEN_USER}\npassword ${MAVEN_PASSWORD}" >> ~/.netrc
+                echo -e "\n\nmachine github.com\nlogin ${MAVEN_USER}\npassword ${MAVEN_PASSWORD}" >> ~/.netrc
+                
+                chmod 0600 /Users/vagrant/.netrc
+          title: Configure .netrc
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -ex
+                version=`cat version.yaml`
+                
+                modules=(
+                {{ cookiecutter.project_name|lower|replace(' ', '_') }}_platform_interface
+                {{ cookiecutter.project_name|lower|replace(' ', '_') }}_android
+                {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios
+                {{ cookiecutter.project_name|lower|replace(' ', '_') }}
+                )
+                
+                for t in ${modules[@]}; do
+                   pubspec="${t}/pubspec.yaml"
+                   sed -i'.orig' -e "s/version: .*/$version/g" $pubspec
+                done
+                
+                ./pub_get.sh
+          title: Update pubspec versions
+      - script@1:
+          inputs:
+            - content: |
+                #!/usr/bin/env bash
+                set -ex
+                version=`cat version.yaml | cut -d':' -f2`
+                
+                version=`echo $version`
+                
+                podspec="{{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios/ios/{{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios.podspec"
+                sed -i'.orig' -e "s/^s.version          = .*/s.version          = '$version'/g" $podspec
+                gradle="{{ cookiecutter.project_name|lower|replace(' ', '_') }}_android/android/build.gradle"
+                sed -i'.orig' -e "s/^version .*/version '$version'/g" $gradle
+          title: Update podspec, AAR versions
+      - script@1:
+          inputs:
+            - content: |
+                set -ex
+                
+                echo "Running flutter analyze"
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_platform_interface; flutter analyze)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_android; flutter analyze)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios; flutter analyze)
+                (cd {{ cookiecutter.project_name|lower|replace(' ', '_') }}; flutter analyze)
+                
+                echo "Building & analyzing [test_app]"
+                (cd test_app/ios;bundle exec pod install)
+                (cd test_app;flutter build apk)
+                (cd test_app;flutter build ios --simulator)
+          title: Sanity check
+      - script@1:
+          inputs:
+            - title: Update plugin references to tag
+            - content: |
+                #!/usr/bin/env bash
+                
+                rversion=`cat version.yaml | cut -d':' -f2`
+                rversion=$(echo $rversion)
+
+                modules=(
+                {{ cookiecutter.project_name|lower|replace(' ', '_') }}_platform_interface
+                {{ cookiecutter.project_name|lower|replace(' ', '_') }}_android
+                {{ cookiecutter.project_name|lower|replace(' ', '_') }}_ios
+                {{ cookiecutter.project_name|lower|replace(' ', '_') }}
+                )
+                
+                for t in ${modules[@]}; do
+                  pubspec="${t}/pubspec.yaml"
+                  sed -i'.orig' -e "s|^      ref: .* #plugin|      ref: $rversion #plugin|g" $pubspec
+                done
+      - script@1:
+          inputs:
+            - content: |
+                #!/usr/bin/env bash
+                # fail if any commands fails
+                set -ex
+                
+                version=`cat version.yaml | cut -d':' -f2`
+                version=`echo $version`
+                
+                if git rev-parse  "$version" >/dev/null 2>&1; then
+                  echo "Version [${version}] already  exists on GitHub!";
+                  exit -1
+                fi
+                
+                sed -i'.orig' -e "s/^Latest version: .*/Latest version: $version/g" README.md
+                
+                git add .
+                git status -v
+                
+                git commit -m "🚀 Released version $version"
+                git tag $version
+                git push origin HEAD:master
+                git push origin --tags
+          title: Release the version
+      - deploy-to-bitrise-io@2.0: {}
+      - cache-push@2: {}
+meta:
+  bitrise.io:
+    stack: osx-xcode-13.4.x
